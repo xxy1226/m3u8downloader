@@ -47,9 +47,37 @@ def read_m3u8(path: str) -> list[str]:
         with open(path, 'r') as f:
             return f.readlines()
     else: return
+
+def analyze_m3u8(content: list) -> dict:
+    '''分析 m3u8 内容以得到：
+        id(str)
+        content(list)内容
+        time(int)累计时间
+    '''
+    d = {}
+    d['time'] = []
+    for line in content:
+        t = 0.0
+        if '#EXTINF:' in line:
+            t = float(line[line.rfind(':')+1:line.rfind(',')])
+        d['time'].append(t if len(d['time']) == 0 else t + d['time'][-1])
+    return d
+
+
+def download_video(m3u8: str, video_folder, video_name, max_thread, headers):
+    '''输入 m3u8 内容，下载并合并视频
+    
+    :param m3u8: str m3u8文件的内容
+    :param video_folder: str 目标文件夹路径
+    :param video_name: str 目标文件名
+    :param max_thread: int 最大线程数
+    :param headers: dict HTTP请求头
+    '''
+    # with open(os.path.join())
+    pass
     
 if __name__ == '__main__':
-    m3u8 = read_m3u8('index.m3u8')
+    m3u8 = read_m3u8('testfiles/short2.m3u8')
     if m3u8:
         print(m3u8)
     else:
