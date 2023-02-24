@@ -4,6 +4,7 @@ from tkinter import ttk
 from tkinter import messagebox
 
 import os, sys, time
+from typing import Literal
 from requests import get
 from threading import Thread
 from re import compile, S
@@ -50,7 +51,6 @@ class M3u8Downloader:
         self.button_lang = ttk.Menubutton(self.subframe_url1, text=lang, width=7)
         self.button_lang.grid(row=0, column=3, sticky='e')
         self.menu_langs = Menu(self.button_lang, tearoff=False)
-        lang_commands = {}
         for language in langs:
             self.menu_langs.add_command(label=language, command=lambda l=language:self.change_lang(l, master))
         self.button_lang.config(menu=self.menu_langs)
@@ -208,10 +208,10 @@ class M3u8Downloader:
         urlpath = self.entry_urlpath.get()
         # 没有输入
         if len(urlpath) == 0:
-            messagebox.showerror('错误', message='没有可分析的内容！')
+            self.show_message('Err', message=self.use_lang['no_input'])
         # 不是 http 地址 也不是 m3u8 文件
         elif urlpath.find('http') != 0 and urlpath[-5:] != '.m3u8':
-            messagebox.showerror('错误', message='不支持的地址！')
+            self.show_message('Err', message=self.use_lang['invalid_input'])
         # 用户输入 http 地址 或者 本地 m3u8 文件路径，且不是误触
         elif urlpath != self.previous_analyze:
             found = False
@@ -230,29 +230,34 @@ class M3u8Downloader:
                     c = read_m3u8(urlpath)
                 if c:
                     self.load_found_m3u8(c, 0, urlpath)
+                    found = True
             elif urlpath.find('http') == 0:
-                try:
-                    r = get(urlpath, headers=headers)
-                    if r.ok:
-                        r.encoding = 'utf-8'
-                        m3u8_list = find_m3u8s(r.text)
-                        count = 0
-                        if len(m3u8_list) > 0:
-                            for item in m3u8_list:
-                                self.found_m3u8.insert('', count, 'm3u8_'+str(count), text=item)
-                                count += 1
-                            self.found_m3u8.selection_add('m3u8_0')
-                        else: messagebox.showwarning('错误', '没有找到 m3u8 文件！')
-                except Exception as e:
-                    messagebox.showerror('错误', '无法打开网页！')
-            if not found:
+                r = download(urlpath)
+                if r[0] == '[' and r[0:4] != '[OK]':
+                    self.show_message(r[1:4], self.use_lang[r[5:]])
+                else:
+                    m3u8_list = find_m3u8s_web(r)
+                    count = 0
+                    if len(m3u8_list) > 0:
+                        for item in m3u8_list:
+                            for k in item:
+                                self.load_found_m3u8(item[k], count, k)
+                            count += 1
+                        found = True
+                    else: self.show_message('Err', self.use_lang['m3u8_not_found'])
+
+            if found:
                 self.found_m3u8.selection_add('m3u8_0')
             self.previous_analyze = urlpath
             self.enable_analyze()
     
-    def load_found_m3u8(self, c: list, id: int, urlpath: str):
-        self.found_m3u8.insert('', 'end', 'm3u8_'+str(id), text=urlpath, values=[''.join(c)])
-        self.m3u8_analyzed['m3u8_'+str(id)] = analyze_m3u8(c)
+    def load_found_m3u8(self, content: list, id: int, urlpath: str):
+        '''在树状列表中载入找到的 m3u8 文件
+        
+        :param content: m3u8 内容列表，以行分割
+        '''
+        self.found_m3u8.insert('', 'end', 'm3u8_'+str(id), text=urlpath, values=[''.join(content)])
+        self.m3u8_analyzed['m3u8_'+str(id)] = analyze_m3u8(content)
 
     # 框架1.2方法：分析找到的 m3u8 地址
 
@@ -332,7 +337,11 @@ class M3u8Downloader:
             item.config(state=NORMAL)
         for tv in self.treeview_list:
             tv.config(selectmode=BROWSE)
-            
+
+    def show_message(self, type: Literal['Err', 'Warn', 'Info'], message: str) -> None:
+        if type == 'Err': messagebox.showerror(self.use_lang['err'], message)
+        elif type == 'Warn': messagebox.showwarning(self.use_lang['warn'], message)
+        elif type == 'Info': messagebox.showinfo(self.use_lang['info'], message)
 
 
 def main():
